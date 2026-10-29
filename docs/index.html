@@ -1,0 +1,1055 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Fonometro di casa</title>
+<meta name="description" content="Misura rumore (dB) e riverbero (RT60) delle stanze di casa con il microfono dell'iPhone.">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Fonometro">
+<meta name="theme-color" content="#eef3f3" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0f1a1e" media="(prefers-color-scheme: dark)">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icon-512.png">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chivo+Mono:wght@400;600&family=Figtree:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: strumento da misura a colonna singola, lettura grande in alto, schede in basso */
+:root {
+  --bg: #eef3f3;
+  --surface: #ffffff;
+  --surface-2: #e2eaeb;
+  --line: #cad6d8;
+  --fg: #12262c;
+  --muted: #557079;
+  --accent: #0f7f86;
+  --accent-ink: #ffffff;
+  --track: #d5e0e2;
+  --ok: #2f9e5b;
+  --warn: #c9930a;
+  --hot: #d9661f;
+  --danger: #c93a32;
+  --font-display: "Chivo Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --font-body: "Figtree", -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --radius: 14px;
+  --tabbar-h: 64px;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1a1e; --surface: #16252a; --surface-2: #1d3037; --line: #2a4149;
+    --fg: #e4eef0; --muted: #8fa9b0; --accent: #4cc3c0; --accent-ink: #062226;
+    --track: #24383f; --ok: #4cc27a; --warn: #e3b33a; --hot: #f08a45; --danger: #f0665d;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1a1e; --surface: #16252a; --surface-2: #1d3037; --line: #2a4149;
+  --fg: #e4eef0; --muted: #8fa9b0; --accent: #4cc3c0; --accent-ink: #062226;
+  --track: #24383f; --ok: #4cc27a; --warn: #e3b33a; --hot: #f08a45; --danger: #f0665d;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font: 16px/1.45 var(--font-body);
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom, 0px));
+}
+.wrap {
+  max-width: 560px;
+  margin: 0 auto;
+  padding-block: 12px 28px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+h1, h2, h3 { margin: 0; text-wrap: balance; line-height: 1.2; }
+h1 { font-size: 1.6rem; font-weight: 700; }
+h2 { font-size: 1.05rem; font-weight: 600; }
+p { margin: 0; }
+.muted { color: var(--muted); }
+.small { font-size: .85rem; }
+.label {
+  font-size: .72rem; text-transform: uppercase; letter-spacing: .08em;
+  color: var(--muted); font-weight: 600;
+}
+.num { font-family: var(--font-display); font-variant-numeric: tabular-nums; }
+.head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.pill {
+  font-size: .78rem; font-weight: 600; padding: 4px 10px; border-radius: 99px;
+  background: var(--surface-2); color: var(--muted); white-space: nowrap;
+}
+.pill.live { background: color-mix(in srgb, var(--danger) 16%, transparent); color: var(--danger); }
+.pill.live::before { content: "● "; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; }
+.view[hidden] { display: none !important; }
+.view { display: flex; flex-direction: column; gap: 16px; }
+
+/* Lettura principale */
+.gauge { position: relative; width: min(78vw, 300px); aspect-ratio: 1; margin: 4px auto calc(min(78vw, 300px) * -0.14); max-width: 100%; }
+.gauge svg { width: 100%; height: 100%; display: block; }
+.gauge .readout {
+  position: absolute; inset: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 2px;
+}
+.gauge .value { font-family: var(--font-display); font-size: clamp(3.6rem, 19vw, 5.2rem); font-weight: 600; line-height: 1; letter-spacing: -.03em; }
+.gauge .unit { font-size: 1rem; color: var(--muted); font-weight: 600; }
+.verdict { text-align: center; font-weight: 600; min-height: 1.5em; }
+.scale-ticks text { font: 11px var(--font-display); fill: var(--muted); }
+
+.stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.stat { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; min-width: 0; }
+.stat .v { font-family: var(--font-display); font-size: 1.25rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.stat .u { font-size: .75rem; color: var(--muted); margin-left: 2px; }
+
+.chart { width: 100%; height: 160px; display: block; }
+
+.buttons { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 8px; }
+button {
+  font: 600 1rem var(--font-body); border-radius: 12px; border: 1px solid var(--line);
+  padding: 13px 12px; background: var(--surface); color: var(--fg); cursor: pointer;
+  min-height: 48px;
+}
+button:focus-visible, input:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 55%, transparent); outline-offset: 2px; }
+button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+button.stop { background: var(--danger); border-color: var(--danger); color: #fff; }
+button:disabled { opacity: .45; cursor: default; }
+button.link { background: none; border: none; color: var(--accent); padding: 6px 0; min-height: 0; font-size: .92rem; }
+button.link.danger { color: var(--danger); }
+
+.notice { border-radius: 12px; padding: 12px 14px; font-size: .92rem; background: color-mix(in srgb, var(--warn) 14%, var(--surface)); border: 1px solid color-mix(in srgb, var(--warn) 40%, transparent); }
+.notice.error { background: color-mix(in srgb, var(--danger) 12%, var(--surface)); border-color: color-mix(in srgb, var(--danger) 40%, transparent); }
+
+.save-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.save-row input { flex: 1 1 180px; min-width: 0; }
+input[type="text"] {
+  font: 1rem var(--font-body); padding: 12px; border-radius: 12px; border: 1px solid var(--line);
+  background: var(--bg); color: var(--fg); min-height: 48px;
+}
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font-size: .85rem; padding: 6px 12px; min-height: 0; border-radius: 99px; background: var(--surface-2); border: none; font-weight: 500; }
+
+/* Riverbero */
+.status { display: flex; gap: 14px; align-items: center; }
+.status .icon { width: 44px; height: 44px; border-radius: 50%; flex: none; display: grid; place-items: center; background: var(--surface-2); }
+.status .icon svg { width: 24px; height: 24px; }
+.status.armed .icon { background: var(--accent); color: var(--accent-ink); animation: pulse 1s ease-in-out infinite; }
+.status.recording .icon { background: var(--hot); color: #fff; }
+.status.done .icon { background: var(--ok); color: #fff; }
+.status.failed .icon { background: var(--warn); color: #fff; }
+@keyframes pulse { 50% { transform: scale(1.12); } }
+.rt-big { font-family: var(--font-display); font-size: 1.6rem; font-weight: 600; }
+.rows { display: flex; flex-direction: column; }
+.row { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--line); align-items: baseline; }
+.row:last-child { border-bottom: none; }
+.row .num { white-space: nowrap; }
+
+/* Stanze */
+.room h2 { margin-bottom: 8px; }
+.room-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 6px; }
+.m-item { display: flex; justify-content: space-between; gap: 10px; padding: 10px 0; border-top: 1px solid var(--line); }
+.m-item .meta { min-width: 0; }
+.m-item .del { background: none; border: none; color: var(--muted); padding: 4px 8px; min-height: 0; font-size: 1.2rem; line-height: 1; }
+.empty { text-align: center; padding: 28px 16px; }
+
+/* Impostazioni */
+.seg { display: grid; grid-template-columns: 1fr 1fr; background: var(--surface-2); border-radius: 12px; padding: 4px; gap: 4px; }
+.seg button { border: none; background: transparent; min-height: 40px; padding: 8px; font-weight: 500; }
+.seg button[aria-pressed="true"] { background: var(--surface); box-shadow: 0 1px 3px rgb(0 0 0 / .12); font-weight: 600; }
+.stepper { display: flex; align-items: center; gap: 10px; }
+.stepper button { width: 52px; padding: 0; font-size: 1.4rem; }
+.stepper .num { flex: 1; text-align: center; font-size: 1.4rem; font-weight: 600; }
+ul.tips { margin: 0; padding-left: 1.1rem; display: flex; flex-direction: column; gap: 6px; }
+
+/* Barra schede */
+nav.tabs {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+  border-top: 1px solid var(--line);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+}
+nav.tabs .inner { max-width: 560px; margin: 0 auto; display: grid; grid-template-columns: repeat(4, 1fr); height: var(--tabbar-h); }
+nav.tabs button {
+  border: none; background: none; border-radius: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 3px; font-size: .7rem; font-weight: 600;
+  color: var(--muted); padding: 6px 0; min-height: 0;
+}
+nav.tabs button svg { width: 24px; height: 24px; }
+nav.tabs button[aria-selected="true"] { color: var(--accent); }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- MISURA -->
+  <section class="view" id="view-meter" aria-labelledby="t-meter">
+    <div class="head">
+      <h1 id="t-meter">Fonometro</h1>
+      <span class="pill" id="live-pill">Fermo</span>
+    </div>
+
+    <div class="gauge" aria-live="off">
+      <svg viewBox="0 0 240 240" aria-hidden="true">
+        <circle id="g-track" cx="120" cy="120" r="96" fill="none" stroke="var(--track)" stroke-width="18" stroke-linecap="round" transform="rotate(135 120 120)"></circle>
+        <circle id="g-bar" cx="120" cy="120" r="96" fill="none" stroke="var(--ok)" stroke-width="18" stroke-linecap="round" transform="rotate(135 120 120)" style="transition: stroke-dasharray .12s linear, stroke .3s"></circle>
+        <g class="scale-ticks" id="g-ticks"></g>
+      </svg>
+      <div class="readout">
+        <div class="value" id="level">–</div>
+        <div class="unit" id="level-unit">dB(A)</div>
+      </div>
+    </div>
+    <p class="verdict" id="verdict">Premi Avvia per iniziare a misurare</p>
+
+    <div class="stats">
+      <div class="stat"><div class="label">Min</div><span class="v" id="s-min">–</span><span class="u" data-unit>dB(A)</span></div>
+      <div class="stat"><div class="label">Max</div><span class="v" id="s-max">–</span><span class="u" data-unit>dB(A)</span></div>
+      <div class="stat"><div class="label">Leq</div><span class="v" id="s-leq">–</span><span class="u" data-unit>dB(A)</span></div>
+      <div class="stat"><div class="label">Picco</div><span class="v" id="s-peak">–</span><span class="u">dB</span></div>
+      <div class="stat"><div class="label">Durata</div><span class="v" id="s-dur">0:00</span></div>
+      <div class="stat"><div class="label">Risposta</div><span class="v" id="s-tw">Fast</span></div>
+    </div>
+
+    <div class="panel">
+      <div class="head"><span class="label">Ultimi 60 secondi</span><span class="small muted num" id="chart-range">20–120 dB</span></div>
+      <canvas class="chart" id="history-chart"></canvas>
+    </div>
+
+    <div class="buttons">
+      <button class="primary" id="btn-start">Avvia</button>
+      <button id="btn-reset">Azzera</button>
+      <button id="btn-save" disabled>Salva</button>
+    </div>
+
+    <div class="panel" id="save-panel" hidden>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <h2>Salva misura</h2>
+        <p class="small muted" id="save-summary"></p>
+        <div class="chips" id="room-chips-meter"></div>
+        <div class="save-row">
+          <input type="text" id="room-name-meter" placeholder="Nome stanza, es. Soggiorno" autocomplete="off">
+          <button class="primary" id="btn-save-confirm">Salva</button>
+          <button id="btn-save-cancel">Annulla</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="notice" id="meter-notice" hidden></div>
+  </section>
+
+  <!-- RIVERBERO -->
+  <section class="view" id="view-reverb" hidden aria-labelledby="t-reverb">
+    <h1 id="t-reverb">Riverbero (RT60)</h1>
+    <p class="muted">Il tempo di riverberazione indica quanti secondi impiega il suono a calare di 60 dB. Mettiti al centro della stanza, chiedi silenzio, premi «Avvia test» e quando richiesto batti le mani una volta, forte e secco. Ripeti 3–5 volte in punti diversi.</p>
+
+    <div class="panel status" id="rt-status">
+      <div class="icon" id="rt-icon"></div>
+      <div style="min-width:0">
+        <h2 id="rt-title">Pronto</h2>
+        <p class="small muted" id="rt-detail">Premi «Avvia test» e resta in silenzio per un secondo.</p>
+      </div>
+    </div>
+
+    <button class="primary" id="btn-rt">Avvia test</button>
+
+    <div class="panel" id="rt-chart-panel" hidden>
+      <div class="head"><span class="label">Curva di decadimento</span><span class="small muted" id="rt-method"></span></div>
+      <canvas class="chart" id="decay-chart" style="height:180px"></canvas>
+      <p class="small muted">Grigio: livello misurato. Colore: curva integrata di Schroeder, da cui si ricava l'RT60.</p>
+    </div>
+
+    <div class="panel" id="rt-results" hidden>
+      <div class="head"><h2>Prove</h2><button class="link danger" id="btn-rt-clear">Azzera</button></div>
+      <div class="rows" id="rt-rows"></div>
+      <div class="row" style="border-top:1px solid var(--line);margin-top:4px">
+        <strong>Media</strong><span class="rt-big" id="rt-avg">–</span>
+      </div>
+      <p class="small muted" id="rt-avg-text"></p>
+      <div style="display:flex;flex-direction:column;gap:10px;margin-top:12px">
+        <div class="chips" id="room-chips-rt"></div>
+        <div class="save-row">
+          <input type="text" id="room-name-rt" placeholder="Nome stanza, es. Camera" autocomplete="off">
+          <button id="btn-rt-save">Salva media</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2 style="margin-bottom:6px">Valori di riferimento</h2>
+      <div class="rows">
+        <div class="row"><span>Camera da letto</span><span class="num muted">0,3–0,5 s</span></div>
+        <div class="row"><span>Soggiorno</span><span class="num muted">0,4–0,6 s</span></div>
+        <div class="row"><span>Studio / home office</span><span class="num muted">0,3–0,5 s</span></div>
+        <div class="row"><span>Cucina / bagno</span><span class="num muted">0,5–0,8 s</span></div>
+        <div class="row"><span>Stanza vuota</span><span class="num muted">1,0–2,0 s</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- STANZE -->
+  <section class="view" id="view-rooms" hidden aria-labelledby="t-rooms">
+    <div class="head">
+      <h1 id="t-rooms">Stanze</h1>
+      <button class="link" id="btn-export">Esporta CSV</button>
+    </div>
+    <div id="rooms-list"></div>
+    <div class="notice" id="export-notice" hidden></div>
+    <div id="delete-all-area"></div>
+  </section>
+
+  <!-- IMPOSTAZIONI -->
+  <section class="view" id="view-settings" hidden aria-labelledby="t-settings">
+    <h1 id="t-settings">Impostazioni</h1>
+
+    <div class="panel" style="display:flex;flex-direction:column;gap:10px">
+      <span class="label">Ponderazione in frequenza</span>
+      <div class="seg" role="group" aria-label="Ponderazione in frequenza">
+        <button id="w-A" aria-pressed="true">A – come l'orecchio</button>
+        <button id="w-Z" aria-pressed="false">Z – lineare</button>
+      </div>
+      <p class="small muted">La curva A è lo standard per valutare il rumore negli ambienti abitativi.</p>
+    </div>
+
+    <div class="panel" style="display:flex;flex-direction:column;gap:10px">
+      <span class="label">Risposta temporale</span>
+      <div class="seg" role="group" aria-label="Risposta temporale">
+        <button id="tw-fast" aria-pressed="true">Fast (125 ms)</button>
+        <button id="tw-slow" aria-pressed="false">Slow (1 s)</button>
+      </div>
+    </div>
+
+    <div class="panel" style="display:flex;flex-direction:column;gap:12px">
+      <span class="label">Calibrazione</span>
+      <div class="stepper">
+        <button id="cal-minus" aria-label="Diminuisci offset">−</button>
+        <span class="num" id="cal-value">110,0 dB</span>
+        <button id="cal-plus" aria-label="Aumenta offset">+</button>
+      </div>
+      <div class="row"><span>Livello attuale</span><span class="num" id="cal-level">–</span></div>
+      <button class="link" id="cal-reset" style="align-self:flex-start">Ripristina valore predefinito</button>
+      <p class="small muted">Ogni iPhone e ogni browser trattano il microfono in modo un po' diverso. Per valori assoluti più precisi, misura accanto a un fonometro di riferimento con un rumore costante e regola l'offset finché i due valori coincidono. Per confrontare le stanze tra loro la calibrazione non serve.</p>
+    </div>
+
+    <div class="panel" style="display:flex;flex-direction:column;gap:10px">
+      <h2>Consigli per misurare</h2>
+      <ul class="tips small">
+        <li>Tieni l'iPhone a 1–1,5 m da terra, lontano da pareti e dal corpo, con il microfono libero.</li>
+        <li>Per il rumore di fondo chiudi porte e finestre e misura 1–2 minuti per stanza, poi confronta i Leq.</li>
+        <li>Ripeti di notte e nelle ore di punta per capire l'isolamento da traffico e vicini.</li>
+        <li>Per il riverbero fai più battiti di mani in punti diversi e usa la media.</li>
+        <li>Lascia lo schermo acceso e la pagina in primo piano durante la misura.</li>
+      </ul>
+    </div>
+
+    <div class="panel">
+      <h2 style="margin-bottom:6px">Riferimenti (OMS)</h2>
+      <div class="rows small">
+        <div class="row"><span>Camera da letto di notte</span><span class="num muted">≤ 30 dB(A)</span></div>
+        <div class="row"><span>Soggiorno di giorno</span><span class="num muted">≤ 35–40 dB(A)</span></div>
+        <div class="row"><span>Conversazione normale</span><span class="num muted">≈ 60 dB(A)</span></div>
+        <div class="row"><span>Rischio uditivo (8 h)</span><span class="num muted">≥ 85 dB(A)</span></div>
+      </div>
+    </div>
+
+    <p class="small muted">Le misure sono stime: il microfono di uno smartphone non sostituisce un fonometro di classe 1/2, soprattutto sotto i 30 dB e alle basse frequenze. I dati restano solo su questo dispositivo.</p>
+  </section>
+</div>
+
+<nav class="tabs" aria-label="Sezioni">
+  <div class="inner" role="tablist">
+    <button role="tab" aria-selected="true" data-view="meter">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12h2M7 8v8M11 5v14M15 9v6M19 11v2"/></svg>Misura
+    </button>
+    <button role="tab" aria-selected="false" data-view="reverb">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 12c3-6 5-6 8 0s5 6 8 0"/><path d="M4 12h1M19 12h1" opacity=".5"/></svg>Riverbero
+    </button>
+    <button role="tab" aria-selected="false" data-view="rooms">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/></svg>Stanze
+    </button>
+    <button role="tab" aria-selected="false" data-view="settings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg>Impostazioni
+    </button>
+  </div>
+</nav>
+
+<script>
+"use strict";
+
+// ---------- Utilità ----------
+const $ = (id) => document.getElementById(id);
+const fmt = (v, d = 1) => (v == null || !isFinite(v)) ? "–" : v.toFixed(d).replace(".", ",");
+const fmtDur = (s) => { const t = Math.floor(s); return Math.floor(t / 60) + ":" + String(t % 60).padStart(2, "0"); };
+const cssVar = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+const store = {
+  get(key, fallback) { try { const v = localStorage.getItem(key); return v == null ? fallback : JSON.parse(v); } catch { return fallback; } },
+  set(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch {} }
+};
+
+const DEFAULT_OFFSET = 110;
+const settings = Object.assign({ weighting: "A", time: "fast", offset: DEFAULT_OFFSET }, store.get("fonometro.settings", {}));
+const saveSettings = () => store.set("fonometro.settings", settings);
+let measurements = store.get("fonometro.measurements", []);
+const saveMeasurements = () => store.set("fonometro.measurements", measurements);
+
+function levelColor(db) {
+  if (db < 45) return cssVar("--ok");
+  if (db < 65) return cssVar("--warn");
+  if (db < 80) return cssVar("--hot");
+  return cssVar("--danger");
+}
+function levelText(db) {
+  if (db < 25) return "Silenzio quasi assoluto";
+  if (db < 35) return "Molto silenzioso, ideale per dormire";
+  if (db < 45) return "Silenzioso, casa tranquilla";
+  if (db < 55) return "Moderato, ambiente domestico attivo";
+  if (db < 65) return "Conversazione normale";
+  if (db < 75) return "Rumoroso: TV alta, aspirapolvere";
+  if (db < 85) return "Molto rumoroso: traffico intenso";
+  return "Pericoloso per esposizioni prolungate";
+}
+function rtText(rt) {
+  if (rt < 0.3) return "Molto secca: tanto assorbimento acustico.";
+  if (rt < 0.5) return "Secca: ottima per camere da letto e studio.";
+  if (rt < 0.8) return "Equilibrata: tipica di un soggiorno arredato.";
+  if (rt < 1.2) return "Riverberante: si percepisce eco, tipica di stanze poco arredate.";
+  return "Molto riverberante: valuta tappeti, tende, librerie o pannelli fonoassorbenti.";
+}
+
+// ---------- Filtro di ponderazione A (IEC 61672) ----------
+// Tre biquad ottenuti con trasformazione bilineare, normalizzati a 0 dB a 1 kHz.
+function aWeightingSections(fs) {
+  const k = 2 * fs, w = (f) => 2 * Math.PI * f;
+  const w1 = w(20.598997), w2 = w(107.65265), w3 = w(737.86223), w4 = w(12194.217);
+  const bil = ([b2, b1, b0], [a2, a1, a0]) => {
+    const A0 = a2 * k * k + a1 * k + a0;
+    return {
+      b: [(b2 * k * k + b1 * k + b0) / A0, (2 * b0 - 2 * b2 * k * k) / A0, (b2 * k * k - b1 * k + b0) / A0],
+      a: [1, (2 * a0 - 2 * a2 * k * k) / A0, (a2 * k * k - a1 * k + a0) / A0]
+    };
+  };
+  const secs = [
+    bil([1, 0, 0], [1, 2 * w1, w1 * w1]),
+    bil([1, 0, 0], [1, w2 + w3, w2 * w3]),
+    bil([0, 0, 1], [1, 2 * w4, w4 * w4])
+  ];
+  const om = 2 * Math.PI * 1000 / fs;
+  let mag = 1;
+  for (const { b, a } of secs) {
+    const re = (c) => c[0] + c[1] * Math.cos(om) + c[2] * Math.cos(2 * om);
+    const im = (c) => -c[1] * Math.sin(om) - c[2] * Math.sin(2 * om);
+    mag *= Math.hypot(re(b), im(b)) / Math.hypot(re(a), im(a));
+  }
+  secs[0].b = secs[0].b.map((x) => x / mag);
+  return secs;
+}
+
+// ---------- Elaborazione a blocchi da 10 ms ----------
+// Canale 0: segnale lineare, canale 1: segnale ponderato A.
+const WORKLET_SRC = `
+class LevelProc extends AudioWorkletProcessor {
+  constructor() { super(); this.n = Math.round(sampleRate * 0.01); this.c = 0; this.r = 0; this.a = 0; this.p = 0; }
+  process(inputs) {
+    const inp = inputs[0];
+    if (!inp || !inp.length) return true;
+    const raw = inp[0], wtd = inp[1] || inp[0];
+    for (let i = 0; i < raw.length; i++) {
+      const x = raw[i], y = wtd[i];
+      this.r += x * x; this.a += y * y;
+      const ax = x < 0 ? -x : x; if (ax > this.p) this.p = ax;
+      if (++this.c >= this.n) {
+        this.port.postMessage([this.r / this.n, this.a / this.n, this.p, this.n / sampleRate]);
+        this.c = 0; this.r = 0; this.a = 0; this.p = 0;
+      }
+    }
+    return true;
+  }
+}
+registerProcessor("level-proc", LevelProc);
+`;
+
+const meter = {
+  ctx: null, stream: null, nodes: [], running: false, wakeLock: null,
+  smoothed: 0, levelFS: null, minFS: null, maxFS: null, peakFS: null,
+  energySum: 0, energyTime: 0, elapsed: 0, history: [], histAcc: 0, histN: 0, histT: 0
+};
+
+function resetStats() {
+  Object.assign(meter, { smoothed: 0, levelFS: null, minFS: null, maxFS: null, peakFS: null, energySum: 0, energyTime: 0, elapsed: 0, history: [], histAcc: 0, histN: 0, histT: 0 });
+  scheduleRender();
+}
+
+function onBlock(rawMS, aMS, peak, dur) {
+  if (!meter.running) return;
+  const ms = settings.weighting === "A" ? aMS : rawMS;
+  const tau = settings.time === "fast" ? 0.125 : 1.0;
+  const c = Math.exp(-dur / tau);
+  meter.smoothed = c * meter.smoothed + (1 - c) * ms;
+  meter.energySum += ms * dur;
+  meter.energyTime += dur;
+  meter.elapsed += dur;
+  const lv = 10 * Math.log10(Math.max(meter.smoothed, 1e-12));
+  meter.levelFS = lv;
+  if (meter.elapsed > 0.5) {
+    meter.minFS = meter.minFS == null ? lv : Math.min(meter.minFS, lv);
+    meter.maxFS = meter.maxFS == null ? lv : Math.max(meter.maxFS, lv);
+  }
+  const pk = 20 * Math.log10(Math.max(peak, 1e-9));
+  meter.peakFS = meter.peakFS == null ? pk : Math.max(meter.peakFS, pk);
+
+  meter.histAcc += lv; meter.histN++;
+  if (meter.histN >= 10) {
+    meter.history.push([meter.elapsed, meter.histAcc / meter.histN]);
+    meter.histAcc = 0; meter.histN = 0;
+    const cut = meter.elapsed - 60;
+    while (meter.history.length && meter.history[0][0] < cut) meter.history.shift();
+  }
+
+  reverb.ingest(10 * Math.log10(Math.max(rawMS, 1e-12)));
+  scheduleRender();
+}
+
+async function startMeter() {
+  if (meter.running) return;
+  hideNotice();
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    showNotice("Questo browser non permette l'accesso al microfono. Apri la pagina in Safari tramite un indirizzo https.", true);
+    return;
+  }
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    const ctx = new AC();
+    meter.ctx = ctx;
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 }
+    });
+    meter.stream = stream;
+    if (ctx.state === "suspended") await ctx.resume();
+
+    const src = ctx.createMediaStreamSource(stream);
+    const merger = ctx.createChannelMerger(2);
+    src.connect(merger, 0, 0);
+    let last = src;
+    const filters = aWeightingSections(ctx.sampleRate).map(({ b, a }) => ctx.createIIRFilter(b, a));
+    for (const f of filters) { last.connect(f); last = f; }
+    last.connect(merger, 0, 1);
+
+    const mute = ctx.createGain();
+    mute.gain.value = 0;
+    mute.connect(ctx.destination);
+    let proc;
+    if (ctx.audioWorklet && window.AudioWorkletNode) {
+      const url = URL.createObjectURL(new Blob([WORKLET_SRC], { type: "application/javascript" }));
+      await ctx.audioWorklet.addModule(url);
+      proc = new AudioWorkletNode(ctx, "level-proc", { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1], channelCount: 2, channelCountMode: "explicit", channelInterpretation: "discrete" });
+      proc.port.onmessage = (e) => onBlock(e.data[0], e.data[1], e.data[2], e.data[3]);
+    } else {
+      // Fallback per browser senza AudioWorklet
+      proc = ctx.createScriptProcessor(4096, 2, 1);
+      const n = Math.round(ctx.sampleRate * 0.01);
+      let cnt = 0, r = 0, aa = 0, p = 0;
+      proc.onaudioprocess = (e) => {
+        const raw = e.inputBuffer.getChannelData(0), wtd = e.inputBuffer.getChannelData(1);
+        for (let i = 0; i < raw.length; i++) {
+          const x = raw[i], y = wtd[i];
+          r += x * x; aa += y * y; const ax = Math.abs(x); if (ax > p) p = ax;
+          if (++cnt >= n) { onBlock(r / n, aa / n, p, n / ctx.sampleRate); cnt = 0; r = 0; aa = 0; p = 0; }
+        }
+      };
+    }
+    merger.connect(proc);
+    proc.connect(mute);
+    meter.nodes = [src, merger, ...filters, proc, mute];
+
+    stream.getAudioTracks().forEach((t) => t.addEventListener("ended", stopMeter));
+    resetStats();
+    meter.running = true;
+    try { meter.wakeLock = await navigator.wakeLock?.request("screen"); } catch {}
+    renderControls();
+  } catch (err) {
+    cleanupAudio();
+    if (err && (err.name === "NotAllowedError" || err.name === "SecurityError")) {
+      showNotice("Accesso al microfono negato. Su iPhone: Impostazioni › Safari › Microfono › Consenti, poi ricarica la pagina.", true);
+    } else {
+      showNotice("Impossibile avviare il microfono: " + (err && err.message ? err.message : err), true);
+    }
+    renderControls();
+  }
+}
+
+function cleanupAudio() {
+  for (const n of meter.nodes) { try { n.disconnect(); } catch {} }
+  meter.nodes = [];
+  if (meter.stream) meter.stream.getTracks().forEach((t) => t.stop());
+  meter.stream = null;
+  if (meter.ctx) { try { meter.ctx.close(); } catch {} }
+  meter.ctx = null;
+  if (meter.wakeLock) { meter.wakeLock.release().catch(() => {}); meter.wakeLock = null; }
+}
+
+function stopMeter() {
+  if (!meter.running) return;
+  meter.running = false;
+  cleanupAudio();
+  if (reverb.isActive()) reverb.cancel();
+  renderControls();
+  scheduleRender();
+}
+
+const cal = (fs) => fs == null ? null : fs + settings.offset;
+const leqFS = () => meter.energyTime > 0 ? 10 * Math.log10(Math.max(meter.energySum / meter.energyTime, 1e-12)) : null;
+
+// ---------- Riverbero (RT60) ----------
+const reverb = {
+  state: "idle", message: "", rt: null, method: "",
+  background: [], recording: [], noise: -120, results: [], decay: [], schroeder: [],
+  isActive() { return ["calibrating", "armed", "recording"].includes(this.state); },
+  arm() { this.background = []; this.recording = []; this.state = "calibrating"; renderReverb(); },
+  cancel() { this.state = "idle"; renderReverb(); },
+  clear() { Object.assign(this, { results: [], decay: [], schroeder: [], method: "", state: "idle" }); renderReverb(); },
+  average() { return this.results.length ? this.results.reduce((a, b) => a + b, 0) / this.results.length : null; },
+  ingest(level) {
+    if (this.state === "calibrating") {
+      this.background.push(level);
+      if (this.background.length >= 100) {
+        const s = [...this.background].sort((a, b) => a - b);
+        this.noise = s[Math.floor(s.length / 2)];
+        this.state = "armed"; renderReverb();
+      }
+    } else if (this.state === "armed") {
+      if (level > this.noise + 20) {
+        this.recording = this.background.slice(-5).concat([level]);
+        this.state = "recording"; renderReverb();
+      } else {
+        this.background.push(level);
+        if (this.background.length > 100) this.background.shift();
+      }
+    } else if (this.state === "recording") {
+      this.recording.push(level);
+      if (this.recording.length >= 300) this.analyze();
+    }
+  },
+  fail(msg) { this.state = "failed"; this.message = msg; renderReverb(); },
+  analyze() {
+    const L = this.recording, bd = 0.01;
+    let pi = 0;
+    for (let i = 1; i < L.length; i++) if (L[i] > L[pi]) pi = i;
+    const peak = L[pi], noise = this.noise, range = peak - noise;
+    if (range < 25) return this.fail(`Impulso troppo debole rispetto al rumore di fondo (${Math.round(range)} dB). Batti le mani più forte o riduci i rumori nella stanza.`);
+
+    this.decay = L.map((v, i) => [(i - pi) * bd, v - peak]).filter((_, i) => i >= pi - 5);
+    const tail = L.slice(pi);
+    let end = tail.findIndex((v) => v <= noise + 3); if (end < 0) end = tail.length;
+    const ne = Math.pow(10, noise / 10);
+    const en = tail.slice(0, end).map((v) => Math.max(Math.pow(10, v / 10) - ne, 0));
+    if (en.length < 5) return this.fail("Decadimento troppo breve per essere misurato. Riprova.");
+
+    const edc = new Array(en.length); let acc = 0;
+    for (let i = en.length - 1; i >= 0; i--) { acc += en[i]; edc[i] = acc; }
+    if (!(edc[0] > 0)) return this.fail("Segnale non valido. Riprova.");
+    const edcDB = edc.map((v) => 10 * Math.log10(Math.max(v / edc[0], 1e-12)));
+    this.schroeder = edcDB.map((v, i) => [i * bd, v]);
+
+    const lower = range >= 35 ? -25 : -15;
+    this.method = range >= 35 ? "Metodo T20" : "Metodo T10";
+    const pts = [];
+    edcDB.forEach((v, i) => { if (v <= -5 && v >= lower) pts.push([i * bd, v]); });
+    if (pts.length < 3) return this.fail("Decadimento troppo rapido o irregolare. Riprova in un punto diverso della stanza.");
+    const mx = pts.reduce((s, p) => s + p[0], 0) / pts.length, my = pts.reduce((s, p) => s + p[1], 0) / pts.length;
+    let num = 0, den = 0;
+    for (const [x, y] of pts) { num += (x - mx) * (y - my); den += (x - mx) ** 2; }
+    const slope = den > 0 ? num / den : 0;
+    if (!(slope < 0)) return this.fail("Impossibile stimare il decadimento. Riprova.");
+    const rt = -60 / slope;
+    if (rt < 0.05 || rt > 5) return this.fail(`Valore fuori scala (${fmt(rt, 2)} s). Riprova.`);
+    this.rt = rt; this.results.push(rt); this.state = "done";
+    renderReverb();
+  }
+};
+
+// ---------- Grafici ----------
+function setupCanvas(canvas) {
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) {
+    canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr);
+  }
+  const g = canvas.getContext("2d");
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.clearRect(0, 0, w, h);
+  return { g, w, h };
+}
+
+function drawAxes(g, w, h, pad, yTicks, yMin, yMax, xLabel) {
+  g.font = "11px " + cssVar("--font-display");
+  g.fillStyle = cssVar("--muted");
+  g.strokeStyle = cssVar("--line");
+  g.lineWidth = 1;
+  g.textAlign = "right"; g.textBaseline = "middle";
+  for (const t of yTicks) {
+    const y = pad.t + (1 - (t - yMin) / (yMax - yMin)) * (h - pad.t - pad.b);
+    g.beginPath(); g.moveTo(pad.l, y); g.lineTo(w - pad.r, y); g.stroke();
+    g.fillText(String(t), pad.l - 6, y);
+  }
+  if (xLabel) { g.textAlign = "right"; g.textBaseline = "bottom"; g.fillText(xLabel, w - pad.r, h); }
+}
+
+function drawHistory() {
+  const { g, w, h } = setupCanvas($("history-chart"));
+  const pad = { l: 34, r: 6, t: 8, b: 16 };
+  const yMin = 20, yMax = 120;
+  drawAxes(g, w, h, pad, [20, 40, 60, 80, 100, 120], yMin, yMax, "secondi");
+  const t1 = Math.max(meter.elapsed, 10), t0 = Math.max(0, t1 - 60);
+  const X = (t) => pad.l + (t - t0) / (t1 - t0) * (w - pad.l - pad.r);
+  const Y = (v) => pad.t + (1 - (Math.min(Math.max(v, yMin), yMax) - yMin) / (yMax - yMin)) * (h - pad.t - pad.b);
+  const pts = meter.history;
+  if (pts.length < 2) return;
+  const accent = cssVar("--accent");
+  g.beginPath();
+  pts.forEach(([t, v], i) => { const x = X(t), y = Y(v + settings.offset); i ? g.lineTo(x, y) : g.moveTo(x, y); });
+  g.lineTo(X(pts[pts.length - 1][0]), h - pad.b); g.lineTo(X(pts[0][0]), h - pad.b); g.closePath();
+  g.globalAlpha = 0.14; g.fillStyle = accent; g.fill(); g.globalAlpha = 1;
+  g.beginPath();
+  pts.forEach(([t, v], i) => { const x = X(t), y = Y(v + settings.offset); i ? g.lineTo(x, y) : g.moveTo(x, y); });
+  g.strokeStyle = accent; g.lineWidth = 2; g.lineJoin = "round"; g.stroke();
+  const [lt, lv] = pts[pts.length - 1];
+  g.beginPath(); g.arc(X(lt), Y(lv + settings.offset), 3.5, 0, Math.PI * 2); g.fillStyle = accent; g.fill();
+}
+
+function drawDecay() {
+  const canvas = $("decay-chart");
+  if (!canvas.clientWidth) return;
+  const { g, w, h } = setupCanvas(canvas);
+  const pad = { l: 34, r: 6, t: 8, b: 16 };
+  const yMin = -70, yMax = 5;
+  drawAxes(g, w, h, pad, [0, -20, -40, -60], yMin, yMax, "secondi");
+  const all = reverb.decay.concat(reverb.schroeder);
+  if (!all.length) return;
+  const t0 = Math.min(...reverb.decay.map((p) => p[0])), t1 = Math.max(...all.map((p) => p[0]), 0.5);
+  const X = (t) => pad.l + (t - t0) / (t1 - t0) * (w - pad.l - pad.r);
+  const Y = (v) => pad.t + (1 - (Math.min(Math.max(v, yMin), yMax) - yMin) / (yMax - yMin)) * (h - pad.t - pad.b);
+  const line = (pts, color, width) => {
+    g.beginPath(); pts.forEach(([t, v], i) => i ? g.lineTo(X(t), Y(v)) : g.moveTo(X(t), Y(v)));
+    g.strokeStyle = color; g.lineWidth = width; g.lineJoin = "round"; g.stroke();
+  };
+  line(reverb.decay, cssVar("--muted"), 1.2);
+  line(reverb.schroeder, cssVar("--accent"), 2.4);
+}
+
+// ---------- Indicatore circolare ----------
+const R = 96, C = 2 * Math.PI * R, ARC = 0.75;
+$("g-track").setAttribute("stroke-dasharray", `${C * ARC} ${C}`);
+(function ticks() {
+  const gt = $("g-ticks");
+  for (const v of [20, 40, 60, 80, 100, 120]) {
+    const f = (v - 20) / 100, ang = (135 + f * 270) * Math.PI / 180;
+    const x = 120 + Math.cos(ang) * 72, y = 120 + Math.sin(ang) * 72;
+    const t = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    t.setAttribute("x", x.toFixed(1)); t.setAttribute("y", y.toFixed(1));
+    t.setAttribute("text-anchor", "middle"); t.setAttribute("dominant-baseline", "middle");
+    t.textContent = v; gt.appendChild(t);
+  }
+})();
+
+// ---------- Rendering ----------
+let renderPending = false;
+function scheduleRender() {
+  if (renderPending) return;
+  renderPending = true;
+  requestAnimationFrame(() => { renderPending = false; renderMeter(); });
+}
+
+const unit = () => settings.weighting === "A" ? "dB(A)" : "dB(Z)";
+
+function renderMeter() {
+  const lv = cal(meter.levelFS);
+  $("level").textContent = lv == null ? "–" : Math.round(lv);
+  $("level").style.color = lv == null ? cssVar("--muted") : levelColor(lv);
+  $("level-unit").textContent = unit();
+  document.querySelectorAll("[data-unit]").forEach((el) => el.textContent = unit());
+  const f = lv == null ? 0 : Math.min(Math.max((lv - 20) / 100, 0), 1);
+  const bar = $("g-bar");
+  bar.setAttribute("stroke-dasharray", `${Math.max(C * ARC * f, 0.01)} ${C}`);
+  bar.setAttribute("stroke", lv == null ? cssVar("--track") : levelColor(lv));
+  $("verdict").textContent = lv == null ? (meter.running ? "In ascolto…" : "Premi Avvia per iniziare a misurare") : levelText(lv);
+  $("s-min").textContent = fmt(cal(meter.minFS));
+  $("s-max").textContent = fmt(cal(meter.maxFS));
+  $("s-leq").textContent = fmt(cal(leqFS()));
+  $("s-peak").textContent = fmt(cal(meter.peakFS));
+  $("s-dur").textContent = fmtDur(meter.elapsed);
+  $("s-tw").textContent = settings.time === "fast" ? "Fast" : "Slow";
+  $("cal-level").textContent = lv == null ? "Avvia la misura per vederlo" : fmt(lv) + " " + unit();
+  if (currentView === "meter") drawHistory();
+  $("btn-save").disabled = leqFS() == null;
+}
+
+function renderControls() {
+  const b = $("btn-start");
+  b.textContent = meter.running ? "Stop" : "Avvia";
+  b.className = meter.running ? "stop" : "primary";
+  const pill = $("live-pill");
+  pill.textContent = meter.running ? "In misura" : "Fermo";
+  pill.classList.toggle("live", meter.running);
+  renderMeter();
+}
+
+const ICONS = {
+  idle: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 12c3-6 5-6 8 0s5 6 8 0"/></svg>',
+  calibrating: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></svg>',
+  armed: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 4v4M5 7l2.5 2.5M19 7l-2.5 2.5"/><circle cx="12" cy="16" r="4"/></svg>',
+  recording: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12h2M7 8v8M11 5v14M15 9v6M19 11v2"/></svg>',
+  done: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5 9-10"/></svg>',
+  failed: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 7v6M12 17v.5"/></svg>'
+};
+
+function renderReverb() {
+  const s = reverb.state;
+  const titles = {
+    idle: "Pronto", calibrating: "Misuro il rumore di fondo…", armed: "Batti le mani ora!",
+    recording: "Registro il decadimento…", done: "RT60 ≈ " + fmt(reverb.rt, 2) + " s", failed: "Misura non riuscita"
+  };
+  const details = {
+    idle: "Premi «Avvia test» e resta in silenzio per un secondo.",
+    calibrating: "Resta in silenzio.",
+    armed: "Un solo battito, forte e secco.",
+    recording: "Non fare rumore per 3 secondi.",
+    done: reverb.method + ". " + (reverb.rt != null ? rtText(reverb.rt) : ""),
+    failed: reverb.message
+  };
+  $("rt-status").className = "panel status " + s;
+  $("rt-icon").innerHTML = ICONS[s];
+  $("rt-title").textContent = titles[s];
+  $("rt-detail").textContent = details[s];
+  const btn = $("btn-rt");
+  btn.textContent = reverb.isActive() ? "Annulla" : (reverb.results.length ? "Nuova prova" : "Avvia test");
+  btn.className = reverb.isActive() ? "" : "primary";
+
+  $("rt-chart-panel").hidden = reverb.decay.length === 0;
+  $("rt-method").textContent = reverb.method;
+  const rows = $("rt-rows"); rows.innerHTML = "";
+  reverb.results.forEach((v, i) => {
+    const r = document.createElement("div"); r.className = "row";
+    const a = document.createElement("span"); a.textContent = "Prova " + (i + 1);
+    const b = document.createElement("span"); b.className = "num"; b.textContent = fmt(v, 2) + " s";
+    r.append(a, b); rows.appendChild(r);
+  });
+  $("rt-results").hidden = reverb.results.length === 0;
+  const avg = reverb.average();
+  $("rt-avg").textContent = avg == null ? "–" : fmt(avg, 2) + " s";
+  $("rt-avg-text").textContent = avg == null ? "" : rtText(avg);
+  renderChips("room-chips-rt", "room-name-rt");
+  if (currentView === "reverb") drawDecay();
+}
+
+// ---------- Stanze ----------
+function roomNames() {
+  const seen = []; [...measurements].sort((a, b) => b.date - a.date).forEach((m) => { if (!seen.includes(m.room)) seen.push(m.room); });
+  return seen;
+}
+function renderChips(containerId, inputId) {
+  const box = $(containerId); box.innerHTML = "";
+  const names = roomNames();
+  const defaults = ["Soggiorno", "Camera", "Cucina", "Bagno", "Studio"];
+  for (const n of [...names, ...defaults.filter((d) => !names.includes(d))].slice(0, 8)) {
+    const c = document.createElement("button"); c.className = "chip"; c.type = "button"; c.textContent = n;
+    c.addEventListener("click", () => { $(inputId).value = n; });
+    box.appendChild(c);
+  }
+}
+function addMeasurement(m) {
+  measurements.push(Object.assign({ id: Date.now() + "-" + Math.random().toString(36).slice(2, 7), date: Date.now() }, m));
+  saveMeasurements();
+  renderRooms();
+}
+function energyAvg(levels) {
+  if (!levels.length) return null;
+  return 10 * Math.log10(levels.reduce((s, v) => s + Math.pow(10, v / 10), 0) / levels.length);
+}
+let confirmDeleteAll = false;
+function renderRooms() {
+  const list = $("rooms-list"); list.innerHTML = "";
+  $("btn-export").hidden = measurements.length === 0;
+  if (!measurements.length) {
+    list.innerHTML = '<div class="panel empty"><h2>Nessuna misura salvata</h2><p class="muted small" style="margin-top:6px">Salva una misura di rumore o di riverbero indicando la stanza: qui potrai confrontare tutti gli ambienti della casa.</p></div>';
+    $("delete-all-area").innerHTML = "";
+    return;
+  }
+  const wrap = document.createElement("div"); wrap.style.cssText = "display:flex;flex-direction:column;gap:12px";
+  for (const room of roomNames()) {
+    const items = measurements.filter((m) => m.room === room).sort((a, b) => b.date - a.date);
+    const leq = energyAvg(items.filter((m) => m.leq != null).map((m) => m.leq));
+    const rts = items.filter((m) => m.rt60 != null).map((m) => m.rt60);
+    const rt = rts.length ? rts.reduce((a, b) => a + b, 0) / rts.length : null;
+    const card = document.createElement("div"); card.className = "panel room";
+    const h = document.createElement("h2"); h.textContent = room; card.appendChild(h);
+    const sum = document.createElement("div"); sum.className = "room-summary";
+    sum.innerHTML = `<div class="stat"><div class="label">Rumore medio</div><span class="v">${fmt(leq)}</span><span class="u">dB</span></div>
+      <div class="stat"><div class="label">RT60 medio</div><span class="v">${fmt(rt, 2)}</span><span class="u">s</span></div>`;
+    card.appendChild(sum);
+    for (const m of items) {
+      const it = document.createElement("div"); it.className = "m-item";
+      const meta = document.createElement("div"); meta.className = "meta";
+      const d = new Date(m.date);
+      const when = d.toLocaleDateString("it-IT", { day: "numeric", month: "short" }) + ", " + d.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
+      const main = document.createElement("div");
+      const det = document.createElement("div"); det.className = "small muted";
+      if (m.rt60 != null) {
+        main.innerHTML = `<strong class="num">RT60 ${fmt(m.rt60, 2)} s</strong>`;
+        det.textContent = when + " · media di " + (m.trials || 1) + " prove";
+      } else {
+        main.innerHTML = `<strong class="num">Leq ${fmt(m.leq)} ${m.weighting === "Z" ? "dB(Z)" : "dB(A)"}</strong>`;
+        main.firstChild.style.color = levelColor(m.leq);
+        det.textContent = `${when} · min ${fmt(m.min)} · max ${fmt(m.max)} · ${fmtDur(m.duration || 0)}`;
+      }
+      meta.append(main, det);
+      const del = document.createElement("button"); del.className = "del"; del.setAttribute("aria-label", "Elimina misura"); del.textContent = "×";
+      del.addEventListener("click", () => { measurements = measurements.filter((x) => x.id !== m.id); saveMeasurements(); renderRooms(); });
+      it.append(meta, del); card.appendChild(it);
+    }
+    wrap.appendChild(card);
+  }
+  list.appendChild(wrap);
+
+  const area = $("delete-all-area"); area.innerHTML = "";
+  if (!confirmDeleteAll) {
+    const b = document.createElement("button"); b.className = "link danger"; b.textContent = "Elimina tutte le misure";
+    b.addEventListener("click", () => { confirmDeleteAll = true; renderRooms(); });
+    area.appendChild(b);
+  } else {
+    const box = document.createElement("div"); box.className = "notice error";
+    box.innerHTML = '<p style="margin-bottom:10px">Eliminare tutte le misure salvate? L\'operazione non si può annullare.</p>';
+    const row = document.createElement("div"); row.className = "save-row";
+    const yes = document.createElement("button"); yes.className = "stop"; yes.textContent = "Elimina tutto";
+    yes.addEventListener("click", () => { measurements = []; saveMeasurements(); confirmDeleteAll = false; renderRooms(); });
+    const no = document.createElement("button"); no.textContent = "Annulla";
+    no.addEventListener("click", () => { confirmDeleteAll = false; renderRooms(); });
+    row.append(yes, no); box.appendChild(row); area.appendChild(box);
+  }
+}
+
+function csv() {
+  const f = (v, d = 1) => v == null ? "" : v.toFixed(d);
+  const lines = ["stanza;data;ponderazione;leq_db;min_db;max_db;picco_db;durata_s;rt60_s"];
+  for (const m of [...measurements].sort((a, b) => a.date - b.date)) {
+    lines.push([m.room.replace(/;/g, ","), new Date(m.date).toISOString(), m.weighting || "", f(m.leq), f(m.min), f(m.max), f(m.peak), m.duration != null ? Math.round(m.duration) : "", f(m.rt60, 2)].join(";"));
+  }
+  return lines.join("\n");
+}
+
+// ---------- Messaggi ----------
+function showNotice(text, error) { const n = $("meter-notice"); n.textContent = text; n.className = "notice" + (error ? " error" : ""); n.hidden = false; }
+function hideNotice() { $("meter-notice").hidden = true; }
+
+// ---------- Navigazione ----------
+let currentView = "meter";
+function showView(name) {
+  currentView = name;
+  for (const v of ["meter", "reverb", "rooms", "settings"]) $("view-" + v).hidden = v !== name;
+  document.querySelectorAll("nav.tabs button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.view === name)));
+  if (name === "meter") drawHistory();
+  if (name === "reverb") renderReverb();
+  if (name === "rooms") renderRooms();
+  window.scrollTo(0, 0);
+}
+document.querySelectorAll("nav.tabs button").forEach((b) => b.addEventListener("click", () => showView(b.dataset.view)));
+
+// ---------- Eventi ----------
+$("btn-start").addEventListener("click", () => meter.running ? stopMeter() : startMeter());
+$("btn-reset").addEventListener("click", resetStats);
+$("btn-save").addEventListener("click", () => {
+  $("save-summary").textContent = `Leq ${fmt(cal(leqFS()))} ${unit()} su ${fmtDur(meter.elapsed)}`;
+  renderChips("room-chips-meter", "room-name-meter");
+  $("save-panel").hidden = false;
+  $("room-name-meter").focus();
+});
+$("btn-save-cancel").addEventListener("click", () => { $("save-panel").hidden = true; });
+$("btn-save-confirm").addEventListener("click", () => {
+  const name = $("room-name-meter").value.trim() || "Senza nome";
+  addMeasurement({ room: name, weighting: settings.weighting, leq: cal(leqFS()), min: cal(meter.minFS), max: cal(meter.maxFS), peak: cal(meter.peakFS), duration: meter.elapsed });
+  $("save-panel").hidden = true;
+  showNotice(`Misura salvata in «${name}». La trovi nella scheda Stanze.`, false);
+  setTimeout(hideNotice, 3500);
+});
+
+$("btn-rt").addEventListener("click", async () => {
+  if (reverb.isActive()) { reverb.cancel(); return; }
+  if (!meter.running) {
+    await startMeter();
+    if (!meter.running) { reverb.fail("Il microfono non è attivo. Controlla l'accesso al microfono nella scheda Misura."); return; }
+  }
+  reverb.arm();
+});
+$("btn-rt-clear").addEventListener("click", () => reverb.clear());
+$("btn-rt-save").addEventListener("click", () => {
+  const avg = reverb.average(); if (avg == null) return;
+  const name = $("room-name-rt").value.trim() || "Senza nome";
+  addMeasurement({ room: name, rt60: avg, trials: reverb.results.length });
+  reverb.clear();
+  $("rt-detail").textContent = `Media salvata in «${name}».`;
+});
+
+$("btn-export").addEventListener("click", async () => {
+  const text = csv();
+  const n = $("export-notice");
+  try {
+    const file = new File([text], "misure-acustiche.csv", { type: "text/csv" });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: "Misure acustiche" }); return; }
+    if (navigator.share) { await navigator.share({ title: "Misure acustiche", text }); return; }
+    await navigator.clipboard.writeText(text);
+    n.textContent = "CSV copiato negli appunti."; n.className = "notice"; n.hidden = false;
+  } catch (e) {
+    if (e && e.name === "AbortError") return;
+    n.textContent = "Condivisione non riuscita. Ecco i dati da copiare:\n" + text; n.className = "notice"; n.style.whiteSpace = "pre-wrap"; n.hidden = false;
+  }
+});
+
+function renderSettings() {
+  $("w-A").setAttribute("aria-pressed", String(settings.weighting === "A"));
+  $("w-Z").setAttribute("aria-pressed", String(settings.weighting === "Z"));
+  $("tw-fast").setAttribute("aria-pressed", String(settings.time === "fast"));
+  $("tw-slow").setAttribute("aria-pressed", String(settings.time === "slow"));
+  $("cal-value").textContent = fmt(settings.offset) + " dB";
+  renderMeter();
+}
+const setSetting = (k, v, reset) => { settings[k] = v; saveSettings(); if (reset) resetStats(); renderSettings(); };
+$("w-A").addEventListener("click", () => setSetting("weighting", "A", true));
+$("w-Z").addEventListener("click", () => setSetting("weighting", "Z", true));
+$("tw-fast").addEventListener("click", () => setSetting("time", "fast"));
+$("tw-slow").addEventListener("click", () => setSetting("time", "slow"));
+$("cal-minus").addEventListener("click", () => setSetting("offset", Math.round((settings.offset - 0.5) * 2) / 2));
+$("cal-plus").addEventListener("click", () => setSetting("offset", Math.round((settings.offset + 0.5) * 2) / 2));
+$("cal-reset").addEventListener("click", () => setSetting("offset", DEFAULT_OFFSET));
+
+document.addEventListener("visibilitychange", async () => {
+  if (document.visibilityState === "visible" && meter.running) {
+    if (meter.ctx && meter.ctx.state !== "running") { try { await meter.ctx.resume(); } catch {} }
+    try { meter.wakeLock = await navigator.wakeLock?.request("screen"); } catch {}
+  }
+});
+window.addEventListener("resize", () => { drawHistory(); if (currentView === "reverb") drawDecay(); });
+window.matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", () => { renderMeter(); renderReverb(); });
+
+renderSettings();
+renderControls();
+renderReverb();
+renderRooms();
+</script>
+</body>
+</html>

@@ -16,7 +16,24 @@ App iOS nativa (SwiftUI) per valutare rumore e acustica delle stanze di casa.
 - **Impostazioni** – ponderazione, calibrazione dell'offset del microfono,
   consigli di misura e valori di riferimento.
 
-## Installazione sul tuo iPhone
+## Versione web (senza Xcode)
+
+La cartella `docs/` contiene la stessa app come pagina web (un solo file
+`index.html`): misura in dB(A)/dB(Z), test RT60 e archivio stanze, con i dati
+salvati solo sul telefono.
+
+1. Pubblica la cartella con GitHub Pages: *Settings › Pages › Build and deployment*,
+   sorgente **Deploy from a branch**, scegli il branch e la cartella `/docs`.
+   GitHub Pages su un repository privato richiede GitHub Pro; altrimenti rendi
+   pubblico il repository.
+2. Apri l'indirizzo (`https://<utente>.github.io/AppTesting/`) in **Safari**
+   sull'iPhone, premi Avvia e consenti il microfono.
+3. *Condividi › Aggiungi alla schermata Home* per averla come un'app.
+
+Safari non offre la modalità di misura nativa di iOS, quindi i valori assoluti
+sono meno affidabili dell'app nativa: calibra l'offset o usa i confronti tra stanze.
+
+## Installazione sul tuo iPhone (app nativa)
 
 Servono un Mac con **Xcode 16** (o successivo) e un iPhone con **iOS 17+**.
 
