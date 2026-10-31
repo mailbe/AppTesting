@@ -18,9 +18,22 @@ App iOS nativa (SwiftUI) per valutare rumore e acustica delle stanze di casa.
 
 ## Versione web (senza Xcode)
 
-La cartella `docs/` contiene la stessa app come pagina web (un solo file
-`index.html`): misura in dB(A)/dB(Z), test RT60 e archivio stanze, con i dati
-salvati solo sul telefono.
+La cartella `docs/` contiene la web app, più completa dell'app nativa:
+
+- **Misura** – fonometro dB(A)/dB(Z) con soglia di riferimento selezionabile nel grafico
+  (OMS notte/giorno, impianti DPCM 5/12/1997, rischio uditivo).
+- **Prove** – sei prove guidate passo passo, con schemi di posizionamento dei telefoni
+  e confronto finale con soglie di legge e classi UNI 11367:
+  isolamento tra stanze, isolamento di facciata, rumore degli impianti,
+  criterio differenziale (vicini/esterno), rumore di fondo, riverbero RT60.
+  Include il glossario dei parametri (L1, L2, D, DnT, R'w, LASmax…).
+- **Emetti** – il telefono A genera rumore rosa, bianco o toni puri, con avvio
+  ritardato e durata, per le prove a due telefoni.
+- **Risultati** – grafici per stanza con le soglie e esportazione CSV.
+
+I file: `index.html`, `app.css` e `js/` (`core.js` motore audio, `norms.js` soglie e
+glossario, `charts.js` grafici e schemi, `emitter.js` emissione, `wizard.js` prove
+guidate, `app.js` interfaccia).
 
 1. Pubblica la cartella con GitHub Pages: *Settings › Pages › Build and deployment*,
    sorgente **Deploy from a branch**, scegli il branch e la cartella `/docs`.
