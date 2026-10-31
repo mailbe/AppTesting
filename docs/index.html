@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Fonometro di casa</title>
+<meta name="description" content="Misura rumore, riverbero e isolamento acustico delle stanze di casa con l'iPhone, con prove guidate e soglie di legge.">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Fonometro">
+<meta name="theme-color" content="#eef3f3" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0f1a1e" media="(prefers-color-scheme: dark)">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icon-512.png">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chivo+Mono:wght@400;600&family=Figtree:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div class="wrap">
+
+  <!-- MISURA -->
+  <section class="view" id="view-meter" aria-labelledby="t-meter">
+    <div class="head">
+      <h1 id="t-meter">Fonometro</h1>
+      <span class="pill" id="live-pill">Fermo</span>
+    </div>
+
+    <div class="gauge">
+      <svg viewBox="0 0 240 240" aria-hidden="true">
+        <circle id="g-track" cx="120" cy="120" r="96" fill="none" stroke="var(--track)" stroke-width="18" stroke-linecap="round" transform="rotate(135 120 120)"></circle>
+        <circle id="g-bar" cx="120" cy="120" r="96" fill="none" stroke="var(--ok)" stroke-width="18" stroke-linecap="round" transform="rotate(135 120 120)" style="transition: stroke-dasharray .12s linear, stroke .3s"></circle>
+        <line id="g-ref" x1="0" y1="0" x2="0" y2="0"></line>
+        <g class="scale-ticks" id="g-ticks"></g>
+      </svg>
+      <div class="readout">
+        <div class="value" id="level">–</div>
+        <div class="unit" id="level-unit">dB(A)</div>
+      </div>
+    </div>
+    <p class="verdict" id="verdict">Premi Avvia per iniziare a misurare</p>
+
+    <div class="stats">
+      <div class="stat"><div class="label">Min</div><span class="v" id="s-min">–</span><span class="u" data-unit>dB(A)</span></div>
+      <div class="stat"><div class="label">Max</div><span class="v" id="s-max">–</span><span class="u" data-unit>dB(A)</span></div>
+      <div class="stat"><div class="label">Leq</div><span class="v" id="s-leq">–</span><span class="u" data-unit>dB(A)</span></div>
+      <div class="stat"><div class="label">Picco</div><span class="v" id="s-peak">–</span><span class="u">dB</span></div>
+      <div class="stat"><div class="label">Durata</div><span class="v" id="s-dur">0:00</span></div>
+      <div class="stat"><div class="label">Risposta</div><span class="v" id="s-tw">Fast</span></div>
+    </div>
+
+    <div class="panel">
+      <div class="chart-head">
+        <span class="label">Ultimi 60 secondi</span>
+        <label class="small muted" for="ref-select">Soglia <select id="ref-select"></select></label>
+      </div>
+      <canvas class="chart" id="history-chart"></canvas>
+      <p class="small muted" id="ref-status" style="margin-top:6px"></p>
+    </div>
+
+    <div class="buttons">
+      <button class="primary" id="btn-start">Avvia</button>
+      <button id="btn-reset">Azzera</button>
+      <button id="btn-save" disabled>Salva</button>
+    </div>
+
+    <div class="panel" id="save-panel" hidden>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <h2>Salva misura</h2>
+        <p class="small muted" id="save-summary"></p>
+        <div class="chips" id="room-chips-meter"></div>
+        <div class="save-row">
+          <input type="text" id="room-name-meter" placeholder="Nome stanza, es. Soggiorno" autocomplete="off">
+          <button class="primary" id="btn-save-confirm">Salva</button>
+          <button id="btn-save-cancel">Annulla</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="notice" id="meter-notice" hidden></div>
+  </section>
+
+  <!-- PROVE -->
+  <section class="view" id="view-tests" hidden aria-labelledby="t-tests">
+    <div class="view" id="tests-list">
+      <div>
+        <h1 id="t-tests">Prove acustiche</h1>
+        <p class="muted" style="margin-top:6px">Scegli una prova: la guida ti accompagna passo passo, con gli schemi di dove mettere i telefoni e il confronto finale con le soglie di legge.</p>
+      </div>
+      <div class="mode-cards" id="mode-cards"></div>
+      <div class="notice small">Per le prove con <strong>2 telefoni</strong>: sul telefono che produce il suono apri la scheda <strong>Emetti</strong>, sull'altro segui la prova qui.</div>
+      <div class="panel">
+        <h2>Parametri e normativa</h2>
+        <div id="glossary"></div>
+      </div>
+    </div>
+    <div class="view" id="tests-run" hidden></div>
+  </section>
+
+  <!-- EMETTI -->
+  <section class="view" id="view-emit" hidden aria-labelledby="t-emit">
+    <div class="head">
+      <h1 id="t-emit">Emetti suono</h1>
+      <span class="pill" id="emit-pill">Spento</span>
+    </div>
+    <p class="muted">Usa questa scheda sul <strong>telefono A</strong>, quello che produce il suono di prova. Sull'altro telefono segui la prova nella scheda Prove.</p>
+
+    <div class="panel emit-main">
+      <button class="emit-btn" id="emit-btn" aria-pressed="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/></svg>
+        <span id="emit-btn-label">Avvia emissione</span>
+      </button>
+      <div class="emit-status num" id="emit-status">Pronto</div>
+      <p class="small muted" id="emit-sub" style="text-align:center"></p>
+    </div>
+    <div class="notice" id="emit-msg" hidden></div>
+
+    <div class="panel opt">
+      <span class="label">Segnale</span>
+      <div class="seg seg-wrap" id="emit-signal"></div>
+      <p class="small muted" id="emit-signal-text"></p>
+      <div class="opt" id="emit-freq-wrap" hidden>
+        <span class="label">Frequenza</span>
+        <div class="seg seg-wrap" id="emit-freq"></div>
+      </div>
+    </div>
+
+    <div class="panel opt">
+      <span class="label">Livello del segnale</span>
+      <div class="seg seg-wrap" id="emit-level"></div>
+      <span class="label" style="margin-top:6px">Avvio ritardato</span>
+      <div class="seg seg-wrap" id="emit-delay"></div>
+      <span class="label" style="margin-top:6px">Durata</span>
+      <div class="seg seg-wrap" id="emit-duration"></div>
+    </div>
+
+    <div class="panel opt">
+      <span class="label">Dove metterlo</span>
+      <div class="seg" id="emit-place"></div>
+      <figure class="fig" id="emit-diagram" style="margin:0"></figure>
+      <ul class="tips small" id="emit-place-text"></ul>
+    </div>
+
+    <div class="panel opt">
+      <h2>Prima di iniziare</h2>
+      <ul class="tips small">
+        <li>Alza il volume al massimo con i tasti laterali: il livello del segnale qui sopra lo riduce solo se il suono è troppo forte.</li>
+        <li>Per un risultato migliore collega il telefono a una <strong>cassa Bluetooth</strong>: più forte è il segnale, più l'isolamento misurato è affidabile. Puoi anche aprire questa pagina su un computer con casse.</li>
+        <li>Non usare il microfono su questo telefono mentre emette: misura con l'altro.</li>
+        <li>Il suono può essere forte: non tenere il telefono vicino alle orecchie.</li>
+        <li>Lo schermo resta acceso durante l'emissione; non chiudere la pagina.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- RISULTATI -->
+  <section class="view" id="view-rooms" hidden aria-labelledby="t-rooms">
+    <div class="head">
+      <h1 id="t-rooms">Risultati</h1>
+      <button class="link" id="btn-export">Esporta CSV</button>
+    </div>
+    <div class="view" id="results-charts"></div>
+    <div id="rooms-list"></div>
+    <div class="notice" id="export-notice" hidden></div>
+    <div id="delete-all-area"></div>
+  </section>
+
+  <!-- IMPOSTAZIONI -->
+  <section class="view" id="view-settings" hidden aria-labelledby="t-settings">
+    <h1 id="t-settings">Impostazioni</h1>
+
+    <div class="panel opt">
+      <span class="label">Ponderazione in frequenza</span>
+      <div class="seg" role="group" aria-label="Ponderazione in frequenza">
+        <button id="w-A" aria-pressed="true">A – come l'orecchio</button>
+        <button id="w-Z" aria-pressed="false">Z – lineare</button>
+      </div>
+      <p class="small muted">La curva A è lo standard per valutare il rumore negli ambienti abitativi. Le prove guidate usano sempre la curva A.</p>
+    </div>
+
+    <div class="panel opt">
+      <span class="label">Risposta temporale</span>
+      <div class="seg" role="group" aria-label="Risposta temporale">
+        <button id="tw-fast" aria-pressed="true">Fast (125 ms)</button>
+        <button id="tw-slow" aria-pressed="false">Slow (1 s)</button>
+      </div>
+    </div>
+
+    <div class="panel opt" style="gap:12px">
+      <span class="label">Calibrazione</span>
+      <div class="stepper">
+        <button id="cal-minus" aria-label="Diminuisci offset">−</button>
+        <span class="num" id="cal-value">110,0 dB</span>
+        <button id="cal-plus" aria-label="Aumenta offset">+</button>
+      </div>
+      <div class="row"><span>Livello attuale</span><span class="num" id="cal-level">–</span></div>
+      <button class="link" id="cal-reset" style="align-self:flex-start">Ripristina valore predefinito</button>
+      <p class="small muted">Ogni iPhone e ogni browser trattano il microfono in modo un po' diverso. Per valori assoluti più precisi, misura accanto a un fonometro di riferimento con un rumore costante e regola l'offset finché i due valori coincidono. Le prove di isolamento usano differenze tra livelli, quindi non dipendono dalla calibrazione.</p>
+    </div>
+
+    <div class="panel opt">
+      <h2>Consigli per misurare</h2>
+      <ul class="tips small">
+        <li>Tieni l'iPhone a 1–1,5 m da terra, lontano da pareti e dal corpo, con il microfono libero.</li>
+        <li>Per il rumore di fondo chiudi porte e finestre e misura 1–2 minuti per stanza.</li>
+        <li>Ripeti di notte e nelle ore di punta per capire l'isolamento da traffico e vicini.</li>
+        <li>Lascia lo schermo acceso e la pagina in primo piano durante la misura.</li>
+      </ul>
+    </div>
+
+    <p class="small muted">Le misure sono stime: il microfono di uno smartphone non sostituisce un fonometro di classe 1, soprattutto sotto i 30 dB e alle basse frequenze. Per valori con valore legale serve un tecnico competente in acustica. I dati restano solo su questo dispositivo.</p>
+  </section>
+</div>
+
+<nav class="tabs" aria-label="Sezioni">
+  <div class="inner" role="tablist">
+    <button role="tab" aria-selected="true" data-view="meter">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12h2M7 8v8M11 5v14M15 9v6M19 11v2"/></svg>Misura
+    </button>
+    <button role="tab" aria-selected="false" data-view="tests">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4h6v3H9z M7 5H5v16h14V5h-2"/><path d="M8.5 13l2.5 2.5 4.5-5"/></svg>Prove
+    </button>
+    <button role="tab" aria-selected="false" data-view="emit">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/></svg>Emetti
+    </button>
+    <button role="tab" aria-selected="false" data-view="rooms">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Risultati
+    </button>
+    <button role="tab" aria-selected="false" data-view="settings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg>Impostazioni
+    </button>
+  </div>
+</nav>
+
+<script src="js/core.js"></script>
+<script src="js/norms.js"></script>
+<script src="js/charts.js"></script>
+<script src="js/emitter.js"></script>
+<script src="js/wizard.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
